@@ -1,66 +1,62 @@
-# Hurricane Melissa Damage Assessment — Jamaica
+# Satellite-Based Remote Sensing Damage Assessment of Five Urban Areas in Jamaica
 
-Multi-indicator satellite remote sensing pipeline for quantifying hurricane damage across five urban areas in Jamaica, built in Google Earth Engine / Python following Hurricane Melissa (Category 5, October 28, 2025).
+*Final project for a Remote Sensing course.*
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/GarretMaloney/DamageAssessment/blob/main/Maloney_Final_Project.ipynb)
 
-## Overview
+Hurricane Melissa struck Jamaica on October 28, 2025, as one of the strongest Category 5 hurricanes on record, causing extensive damage across the island with the most severe impacts concentrated in the west. This project applies remote sensing techniques to quantify different forms of damage — structural, vegetation, debris, and flooding — across five urban areas.
 
-Hurricane Melissa struck Jamaica on October 28, 2025, with the most severe reported impacts concentrated in the west (Montego Bay, Falmouth). This project fuses four independent satellite-based damage indicators into a per-region damage score for five urban areas — Kingston, Montego Bay, Falmouth, Negril, and Ocho Rios — and critically evaluates whether that score actually tracks reported ground-truth severity.
+## Scope Development
 
-## Methodology
+Initially, the plan was to perform a building damage assessment and quantify vegetation damage through NDVI analysis. During development, it became clear that building damage can occur without structural collapse — flooding and wind can ruin foundations or blow out windows while leaving buildings standing. Backscatter was added as a means of detecting flooded areas (lower backscatter) and debris-strewn areas (higher backscatter), giving two additional metrics for quantifying damage remotely. A combined damage index was also created to help assess overall severity.
 
-Four complementary indicators, computed in Google Earth Engine from Sentinel-1 SAR and Sentinel-2 optical imagery:
+## Methods
 
-| Indicator | Data | What it captures | Threshold |
-|---|---|---|---|
-| **SAR coherence** | Sentinel-1 (pre/post pair) | Structural collapse, per building | mean < 0.5, or any pixel < 0.3 -> damaged |
-| **Backscatter decrease** | Sentinel-1 | Flooding / standing water | < -2 dB |
-| **Backscatter increase** | Sentinel-1 | Wind damage / debris accumulation | > +2 dB |
-| **NDVI change** | Sentinel-2 | Vegetation loss | decrease > 0.15 |
+**Area of Interest.** Five areas were investigated: Kingston, Negril, Montego Bay, Falmouth, and Ocho Rios, selected to capture regional variation in damage. News reports indicated that Montego Bay and Falmouth experienced the most severe impacts, while other areas sustained damage to lesser degrees. Polygons were drawn around each area to approximate the urban extent visible in satellite imagery, then clipped to Jamaica's administrative boundary to define clean coastlines and exclude ocean areas from analysis.
 
-Per-building structural damage is assessed against Microsoft Building Footprints rather than raw pixels. An automated image-pair selection step balances two competing constraints — temporal proximity to the hurricane (<=21 days) and spatial coverage of the area of interest (>80%) — since satellite swaths from the same pass can otherwise leave large coverage gaps.
+**Building Damage.** Microsoft Building Footprints were imported from Google Earth Engine and filtered to each area of interest. Per-building damage assessment used SAR coherence calculated from pre- and post-hurricane Sentinel-1 imagery. Buildings were flagged as damaged if mean coherence fell below 0.7 (roof damage or structural issues) or if any pixel within the building showed coherence below 0.5 (severe damage).
 
-Indicators are combined into a 0-40 point weighted damage score (10 points each for structural, water, wind, and vegetation damage) and normalized to a 0-100% severity scale, with several alternative weighting schemes evaluated (urban/infrastructure-weighted, environmental-weighted, severity-scaled).
+**Backscatter Change.** Backscatter change analysis identified flooding and wind damage signatures. Pixels with backscatter decreases exceeding 2 dB were classified as flooded, with severity scaled by the magnitude of decrease. Backscatter increases exceeding 2 dB indicated debris accumulation from wind damage, similarly scaled by magnitude.
+
+**NDVI.** Vegetation damage assessment used NDVI change from Sentinel-2 optical imagery. Unlike the other indicators, which rely on Sentinel-1 SAR data, this optical-based approach provides an independent data stream, reducing single-sensor bias. Pixels with NDVI decreases exceeding 0.15 were classified as experiencing significant vegetation loss.
+
+**Combined Damage Assessment.** A combined damage index synthesized all four indicators at the pixel level:
+- Maximum damage extent — pixels flagged by at least one indicator (useful for survey planning)
+- High-confidence damage zones — pixels flagged by two or more indicators (priority areas for response)
+- A continuous severity layer, on the assumption that pixels showing multiple damage signatures indicate more severe impacts
 
 ## Results
 
-| Region | Score (0-40) | Severity | Buildings damaged |
-|---|---|---|---|
-| Kingston | 15.94 | 39.9% | 61,966 |
-| Falmouth | 15.80 | 39.5% | 817 (54% vegetation loss) |
-| Negril | 14.21 | 35.5% | 1,299 |
-| Montego Bay | 14.18 | 35.5% | 10,072 (50% vegetation loss) |
-| Ocho Rios | 11.74 | 29.4% | 1,996 |
+Point-based scoring (0–40 points: 10 each for structural, water, wind, and vegetation):
 
-## Key Finding: The Score Disagrees With Ground Truth — And That's the Point
+1. **Kingston**: 15.94/40 (39.9%) — 61,966 buildings damaged
+2. **Falmouth**: 15.80/40 (39.5%) — 817 buildings damaged, 54% vegetation loss
+3. **Negril**: 14.21/40 (35.5%) — 1,299 buildings damaged
+4. **Montego Bay**: 14.18/40 (35.5%) — 10,072 buildings damaged, 50% vegetation loss
+5. **Ocho Rios**: 11.74/40 (29.4%) — 1,996 buildings damaged
 
-News reports identified Montego Bay and Falmouth as the most severely damaged areas. The point-based score ranks them 4th and 2nd, with Kingston first. Rather than treating this as a bug to paper over, the notebook diagnoses *why*:
+**Important caveats:** these rankings should be interpreted cautiously. Montego Bay and Falmouth — reported as severely damaged — rank 4th and 2nd, while Kingston ranks first. Kingston's top ranking may be an artifact of its large urban area and high building count rather than damage intensity: Kingston's 61,966 buildings vs. Falmouth's 817 means building count dominates the structural score regardless of per-building severity. No context-specific weighting was applied (urban vs. coastal areas treated equally), and damage density (points/km²) was not considered — normalizing by area, Falmouth's damage density is roughly 9.6x Kingston's.
 
-- **Building count dominates the structural score.** Kingston's 61,966 buildings vs. Falmouth's 817 means Kingston's structural score reflects urban density, not damage intensity — a building coherence of 0.65 (minor) and 0.3 (destroyed) both just count as "damaged."
-- **Polygon size compounds the bias.** Normalizing by area (points/km²) instead of using absolute score reverses the picture: Falmouth's damage density is roughly 9.6x Kingston's.
-- **Vegetation loss is a better proxy here.** Re-ranking by vegetation loss alone puts Falmouth (54%) and Montego Bay (50%) at the top — consistent with reported severity — suggesting environmental damage may be a more reliable signal than building-based scoring for coastal/resort areas in a Category 5 event.
+Re-ranking by vegetation loss alone places Falmouth (54.0%) and Montego Bay (49.8%) at the top, aligning better with news reports of severe damage, ahead of Ocho Rios (34.0%), Negril (31.1%), and Kingston (15.8%).
 
-This distinction — extent vs. severity, and count-based vs. density-based scoring — is the main methodological takeaway of the project.
+## Shortcomings
 
-## Limitations
+**Polygon Definition.** Polygon definition significantly impacts damage assessments. Including less-developed areas with extensive vegetation led to inflated vegetation damage statistics, which can skew overall rankings. Future work should use standardized urban boundaries (e.g., Global Human Settlement Layer) for consistent area definitions.
 
-- Three of four indicators depend on Sentinel-1 alone (single-sensor dependency)
-- Damage thresholds (coherence, dB, NDVI) are physically motivated but not validated against field/ground-truth surveys
-- Polygon (AOI) definition materially affects results; no standardized urban boundary dataset was used
-- SAR coherence cannot detect flooding (water is SAR-smooth) or non-collapse damage (roof/interior damage on a standing building)
-- Cloud cover limits Sentinel-2/NDVI availability, a common post-hurricane constraint
+**Temporal Resolution.** Temporal resolution posed challenges, particularly for optical imagery where cloud cover limited availability. The ephemeral nature of flooding means delays between hurricane landfall and post-event imaging can miss significant impacts — standing water recedes within days, though residual damage signatures remain detectable through backscatter and NDVI changes, which serve as proxies requiring careful threshold calibration.
 
-## Stack
+**Single-Sensor Dependency.** Three of the four damage indicators rely on Sentinel-1 SAR data. While these indicators measure different physical phenomena (coherence vs. backscatter magnitude and direction), issues with Sentinel-1 calibration or processing could systematically bias results.
 
-Google Earth Engine (`ee`, `geemap`), Sentinel-1 GRD, Sentinel-2, Microsoft Building Footprints, Python/NumPy, Google Colab.
+**Threshold and Weight Validation.** Current thresholds were iteratively refined through reasoning about physical implications but lack validation against ground-truth damage assessments. The damage weighting scheme similarly lacks statistical validation — the relative importance of structural vs. vegetation damage in determining overall severity requires domain expertise and empirical calibration against historical hurricane data.
+
+## Reflections on AI-Assisted Development
+
+This project was completed for a remote sensing course that encouraged AI-assisted coding as long as its use was documented and critically reflected on. AI is a powerful tool for iterating on code efficiently, but it requires critical oversight — a thorough understanding of the data, methods, and project scope is essential for recognizing when AI actions diverge from the actual objectives. Conversely, AI frequently proposed valuable extensions beyond the initial scope, such as the backscatter-based water and wind damage indicators. AI generated diagnostic tools were helpful in determining root cause failures that led to more appropriate fixes than having AI try to write a workaround to an inadequately defined error.
+
+## Data Sources
+
+Sentinel-1 SAR (C-band, VV polarization, IW mode), Sentinel-2 optical (NIR + Red for NDVI), Microsoft Building Footprints, custom AOI polygons clipped to Jamaica's administrative boundary. 10m resolution. Pre-event window: Oct 1–27, 2025; post-event window: Oct 29 – Nov 17, 2025; target temporal baseline ≤21 days.
 
 ## Notebook
 
-[`Maloney_Final_Project.ipynb`](Maloney_Final_Project.ipynb) — full pipeline: AOI definition -> image-pair selection -> per-indicator damage computation -> per-building zonal statistics -> weighted scoring -> interactive map visualization -> results/limitations analysis.
-
-## Development Notes
-
-This project was built for a remote sensing course that encouraged AI-assisted coding as long as its use was documented and critically reflected on. AI helped iterate on the pipeline quickly and proposed the backscatter-based water/wind damage indicators as an extension beyond the original building-and-vegetation scope.
-
-The clearest lesson came from a coverage bug: Ocho Rios' structural damage layer only covered a small sliver of the area despite full NDVI coverage. Initial attempts to have AI patch the coherence calculation directly failed to fix it. Asking for a root-cause diagnosis instead of a fix revealed the real issue — the pre/post Sentinel-1 image pair only overlapped 6% spatially — which led to building the automated image-pair selection logic (balancing temporal proximity and spatial coverage) used throughout the rest of the pipeline. The general takeaway: ask for diagnosis before asking for a fix, and keep decisions about scope and interpretation human-driven.
+[`Maloney_Final_Project.ipynb`](Maloney_Final_Project.ipynb)
